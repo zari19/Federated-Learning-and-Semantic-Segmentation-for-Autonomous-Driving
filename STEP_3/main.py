@@ -1,9 +1,7 @@
 import os
 import json
 from collections import defaultdict
-from utils.utils import setup_pre_training, load_from_checkpoint
 import torch.optim as optim
-from time import sleep
 import torch
 import random
 import numpy as np
@@ -23,11 +21,7 @@ from models.deeplabv3 import deeplabv3_mobilenetv2
 from utils.stream_metrics import StreamSegMetrics, StreamClsMetrics
 from utils.utils import setup_env
 from utils.client_utils import setup_clients
-from time import sleep
 from tqdm import tqdm
-from google.colab import auth
-import gspread
-from google.auth import default
 device = torch.device( 'cuda' if torch. cuda. is_available () else 'cpu')
 import torch.optim.lr_scheduler as lr_scheduler
 from utils.utils import HardNegativeMining, MeanReduction
@@ -60,22 +54,21 @@ def model_init(args): #selects the type of model
         model.fc = nn.Linear(in_features=512, out_features=get_dataset_num_classes(args.dataset))
         return model
     if args.model == 'cnn':
-        # TODO: missing code here!
         raise NotImplementedError
     raise NotImplementedError
 
 
 def get_transforms(args): #perform data augmentation based on the model
-    # TODO: test your data augmentation by changing the transforms here!
+   
     if args.model == 'deeplabv3_mobilenetv2':
         train_transforms = sstr.Compose([
-            #sstr.RandomResizedCrop((512, 928), scale=(.5, 2.0)), #default  512, 928  #scale .5,2
+            sstr.RandomResizedCrop((512, 928), scale=(.5, 2.0)),
             sstr.ToTensor(),
-            #sstr.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+            sstr.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
         test_transforms = sstr.Compose([
             sstr.ToTensor(),
-            #sstr.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+            sstr.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
     elif args.model == 'cnn' or args.model == 'resnet18':
         train_transforms = nptr.Compose([
@@ -110,9 +103,9 @@ def read_femnist_data(train_data_dir, test_data_dir):
 def get_gta(args):
     if args.dataset == 'idda':
         train_transforms, test_transforms = get_transforms(args)
-        root = "/content/drive/MyDrive/DELIVERY/idda"  #maybe change path
-        root_gta_img = "/content/drive/MyDrive/DELIVERY/data/GTA5/images"
-        root_gta_labels = "/content/drive/MyDrive/DELIVERY/data/GTA5/labels"
+        root = "/root/GTA5/" 
+        root_gta_img = "/root/GTA5/images"
+        root_gta_labels = "/root/GTA5/labels"
         with open(os.path.join(root, 'train_gta.txt'), 'r') as f:
             flag = True
             train_gta = f.read().splitlines()
@@ -125,34 +118,34 @@ def get_datasets(args): #get access to datasets in root/idda
     train_transforms, test_transforms = get_transforms(args)
 
     if args.dataset == 'idda':
-        root = "/content/drive/MyDrive/DELIVERY/idda"  #maybe change path
-        root_gta_img = "/content/drive/MyDrive/DELIVERY/data/GTA5/images"
-        root_gta_labels = "/content/drive/MyDrive/DELIVERY/data/GTA5/labels"
-        flag = False
+        root = "/root/idda" 
+        root_gta_img = "/root/GTA5/images"
+        root_gta_labels = "/root/GTA5/labels"
+
 
         with open(os.path.join(root, 'train_gta.txt'), 'r') as f:
-            flag = True
+
             train_gta = f.read().splitlines()
             gta_dataset = GTADataset(root=root, list_samples=train_gta, transform=train_transforms, flag =flag)
 
         with open(os.path.join(root, 'train.txt'), 'r') as f:
-            flag = True
+
             eval_idda = f.read().splitlines()
             eval_idda_dataset = IDDADataset(root=root, list_samples=eval_idda, transform=train_transforms)
                                         
         with open(os.path.join(root, 'test_same_dom.txt'), 'r') as f:
-            flag = False
+
             test_same_dom_data = f.read().splitlines()
 
             test_same_dom_dataset = IDDADataset(root=root, list_samples=test_same_dom_data, transform=test_transforms)
         with open(os.path.join(root, 'test_diff_dom.txt'), 'r') as f:
-            flag = False
+
             test_diff_dom_data = f.read().splitlines()
             test_diff_dom_dataset = IDDADataset(root=root, list_samples=test_diff_dom_data, transform=test_transforms,
                                                 client_name='test_diff_dom')
 
         with open(os.path.join(root, 'test_join.txt'), 'r') as f:
-            flag = False
+
             test_join = f.read().splitlines()
             test_join_dataset = IDDADataset(root=root, list_samples=test_join, transform=test_transforms,
                                                 client_name='test_join')
@@ -206,25 +199,11 @@ def gen_clients(args, train_datasets, test_datasets, model):
 
 
 def main():
-    parser = get_parser() #calls function inside utils.args, define seed, #clients ecc.
-    args = parser.parse_args()  #??
-    set_seed(args.seed) #??
+    parser = get_parser()
+    args = parser.parse_args() 
+    set_seed(args.seed)
 
     reduction = HardNegativeMining() if args.hnm else MeanReduction()
-
-    def weight_train_loss(losses):
-        """Function that weights losses over train round, taking only last loss for each user"""
-        fin_losses = {}
-        c = list(losses.keys())[0]
-        loss_names = list(losses['loss'].keys())
-        for l_name in loss_names:
-            tot_loss = 0
-            weights = 0
-            for _, d in losses.items():
-                tot_loss += d['loss'][l_name][-1] * d['num_samples']
-                weights += d['num_samples']
-            fin_losses[l_name] = tot_loss / weights
-        return fin_losses
 
     def get_optimizer(net, lr, wd, momentum):
       optimizer = torch.optim.SGD(net.parameters(), lr=lr, weight_decay=wd, momentum=momentum)
@@ -236,34 +215,6 @@ def main():
         if args.model == 'resnet18':
             return model(images)
         raise NotImplementedError
-
-    def calculate_class_weights(labels):
-        class_weights = torch.zeros(torch.max(labels) + 1)
-
-        # Count the frequency of each class
-        unique, counts = torch.unique(labels, return_counts=True)
-        class_frequency = dict(zip(unique.cpu().numpy(), counts.cpu().numpy()))
-
-        # Calculate class weights using inverse frequency
-        total_samples = torch.sum(torch.tensor(list(class_frequency.values())))
-        for class_label, frequency in class_frequency.items():
-            class_weights[class_label] = total_samples / (frequency * len(class_frequency))
-
-        #class_weights = class_weights.tolist()
-        #print(class_weights)
-        class_weights = torch.cat((class_weights[:15], class_weights[-1:]))
-        #print(class_weights)
-        return class_weights
-
-        # Calculate the unique classes
-        classes = np.unique(y)
-
-        # Calculate class weights
-        weights = class_weight.compute_class_weight(class_weight='balanced', classes=classes, y=y)
-        #print(weights)
-        # Print the class weights
-        #print("Class Weights:", weights)
-        return weights[0:16]
 
 
     def update_metric(metrics, outputs, labels, cur_step):
