@@ -1,37 +1,27 @@
 import os
 import json
-from collections import defaultdict
-from utils.utils import setup_pre_training, load_from_checkpoint
 import torch.optim as optim
 import torch
 import random
 import numpy as np
 import matplotlib.pyplot as plt
 from torchvision.models import resnet18
-from utils.print_stats import print_stats
 import datasets.ss_transforms as sstr
 import datasets.np_transforms as nptr
 from torch import nn
-from client import Client
 from datasets.femnist import Femnist
-from server import Server
 from utils.args import get_parser
 from datasets.idda import IDDADataset
-from datasets.gta import GTADataset
 from models.deeplabv3 import deeplabv3_mobilenetv2
 from utils.stream_metrics import StreamSegMetrics, StreamClsMetrics
-from utils.utils import setup_env
 from utils.client_utils import setup_clients
-from time import sleep
 from tqdm import tqdm
-from google.colab import auth
-import gspread
-from google.auth import default
-device = torch.device( 'cuda' if torch. cuda. is_available () else 'cpu')
 import torch.optim.lr_scheduler as lr_scheduler
 from utils.utils import HardNegativeMining, MeanReduction
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import LambdaLR
+
+device = torch.device( 'cuda' if torch. cuda. is_available () else 'cpu')
 
 def set_seed(random_seed):
     random.seed(random_seed)
@@ -115,21 +105,18 @@ def get_datasets(args): #get access to datasets in root/idda
     train_transforms, test_transforms = get_transforms(args)
 
     if args.dataset == 'idda':
-        root = "/content/drive/MyDrive/DELIVERY/idda"  #maybe change path
-        flag = False
-
-        #change the name of the training file in "train" to avoid data augmentation
-        with open(os.path.join(root, 'train_augmented.txt'), 'r') as f:
-            flag = True
+        root = "/data/idda" 
+    
+        
+        with open(os.path.join(root, 'train_augmented.txt'), 'r') as f:     
             idda_train = f.read().splitlines()
             train_datasets = IDDADataset(root=root, list_samples=idda_train, transform=train_transforms)
                                         
         with open(os.path.join(root, 'test_same_dom.txt'), 'r') as f:
-            flag = False
             test_same_dom_data = f.read().splitlines()
             test_same_dom_dataset = IDDADataset(root=root, list_samples=test_same_dom_data, transform=test_transforms)
+            
         with open(os.path.join(root, 'test_diff_dom.txt'), 'r') as f:
-            flag = False
             test_diff_dom_data = f.read().splitlines()
             test_diff_dom_dataset = IDDADataset(root=root, list_samples=test_diff_dom_data, transform=test_transforms,
                                                 client_name='test_diff_dom')
@@ -188,38 +175,6 @@ def main():
     set_seed(args.seed) 
 
     reduction = HardNegativeMining() if args.hnm else MeanReduction()
-
-    def weight_train_loss(losses):
-        """Function that weights losses over train round, taking only last loss for each user"""
-        fin_losses = {}
-        c = list(losses.keys())[0]
-        loss_names = list(losses['loss'].keys())
-        for l_name in loss_names:
-            tot_loss = 0
-            weights = 0
-            for _, d in losses.items():
-                tot_loss += d['loss'][l_name][-1] * d['num_samples']
-                weights += d['num_samples']
-            fin_losses[l_name] = tot_loss / weights
-        return fin_losses
-
-    def polynomial_decay(epoch):
-        # Set the initial learning rate
-        initial_lr = 0.1
-
-        # Set the final learning rate
-        final_lr = 0.0001
-
-        # Set the power of the polynomial
-        power = 2
-
-        # Calculate the decay factor based on the current epoch and total number of epochs
-        decay_factor = (1 - epoch / args.num_epochs) ** power
-
-        # Calculate the learning rate for the current epoch
-        lr = initial_lr + (final_lr - initial_lr) * decay_factor
-
-        return lr
         
     def get_optimizer(net, lr, wd, momentum):
       optimizer = torch.optim.SGD(net.parameters(), lr=lr, weight_decay=wd, momentum=momentum)
@@ -241,30 +196,13 @@ def main():
         epoch = checkpoint['epoch']
         loss = checkpoint['loss']
 
-    def calc_cazzo(labels):
-        import numpy as np
-        from sklearn.utils import class_weight
-        y = labels.cpu().numpy()
-        y=y.flatten()
-        # Get unique values and counts
-        for i in range(16):
-            if i not in y:
-                y = np.append(y, i)
-
-        classes = np.unique(y)
-
-        weights = class_weight.compute_class_weight(class_weight='balanced', classes=classes, y=y)
-
-        return weights[0:16]
-
-
     def update_metric(metrics, outputs, labels, cur_step):
         _, prediction = outputs.max(dim=1)
         labels = labels.cpu().numpy()
         prediction = prediction.cpu().numpy()
         metrics.update(labels, prediction)
 
-    def test2(metric):
+    def test(metric):
         """
         This method tests the model on the local dataset of the client.
         :param metric: StreamMetric object
@@ -289,13 +227,8 @@ def main():
               _, prediction = outputs.max(dim=1)
               labels = labels.cpu().numpy()
               prediction = prediction.cpu().numpy()
-              unique_values, counts = np.unique(prediction, return_counts=True)
 
               metric[test_type].update(labels, prediction)
-
-              pred2 = prediction[0,:,:]  # Select the first image from the batch
-              plt.imshow(pred2)
-              plt.savefig(test_root +'/pred{}.png'.format(i))
 
             class_loss = torch.tensor(class_loss).to(device)
             print(f'class_loss = {class_loss}')
@@ -307,7 +240,7 @@ def main():
 
     print("Step 1")
     print(f'Initializing model... ')
-    model = model_init(args)  #select type of model from the comand above
+    model = model_init(args)  
     model.cuda()
     print('Done.')
 
@@ -318,23 +251,24 @@ def main():
 
     if args.domain == 'same':
             test_type = "test_same_dom"
-            test_root = "/content/drive/MyDrive/DELIVERY/STEP_1/test_imgs_same_dom"
+            test_root = "/idda/same_dom"
             test_loader_args = DataLoader(test_datasets[0], batch_size=args.bs, shuffle=False)
 
     elif args.domain == 'diff':
         test_type = "test_diff_dom"
-        test_root = "/content/drive/MyDrive/DELIVERY/STEP_1/test_imgs_diff_dom"
+        test_root = "/idda/diff_dom"
         test_loader_args = DataLoader(test_datasets[1], batch_size=args.bs, shuffle=False)
     
     train_dataloader = DataLoader(train_datasets, batch_size=args.bs, shuffle=False)
 
     if args.load == "True":
-        load_checkpoints(PATH = "/content/drive/MyDrive/DELIVERY/STEP_1/checkpoint/model.pt")
+        load_checkpoints(PATH = "root/checkpoint_step1")
 
     model.train()
     net = model
     opt = get_optimizer(net, lr=args.lr, wd=args.wd, momentum=args.m)
     scheduler = lr_scheduler.StepLR(opt, step_size=5, gamma=0.1)
+    
     for r in tqdm(range(args.num_epochs)):
 
         dict_all_epoch_losses = defaultdict(lambda: 0)
@@ -373,7 +307,7 @@ def main():
 
     print("Train completed")
 
-    class_loss, ret_samples = test2(metrics)
+    class_loss, ret_samples = test(metrics)
     print(class_loss)
     test_score = metrics[test_type].get_results()
 
