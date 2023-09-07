@@ -3,8 +3,8 @@ import os
 import sys
 
 # Define the folder paths and main file names
-folders = ["/content/drive/MyDrive/DELIVERY/STEP_1", "/content/drive/MyDrive/DELIVERY/STEP_2", "/content/drive/MyDrive/DELIVERY/STEP_3", "/content/drive/MyDrive/DELIVERY/STEP_4"]
-main_files = ["main.py", "main.py", "main.py", "main.py"]
+folders = ["/root/STEP_1", "/root/STEP_2", "/root/STEP_3", "/root/STEP_4","/root/STEP_5"]
+main_files = ["main.py", "main.py", "main.py", "main.py","main.py"]
 
 # Create a dictionary to map step values to folder indices
 step_to_folder = {
