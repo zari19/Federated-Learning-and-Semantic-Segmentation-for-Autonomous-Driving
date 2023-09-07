@@ -11,12 +11,13 @@ step_to_folder = {
     1: 0,
     2: 1,
     3: 2,
-    4: 3
+    4: 3,
+    5: 4
 }
 
 def execute_main(step):
     if step not in step_to_folder:
-        print("Invalid step value. Step should be 1, 2, 3, or 4.")
+        print("Invalid step value. Step should be 1, 2, 3, 4, or 5.")
         sys.exit(1)
 
     folder_index = step_to_folder[step]
@@ -29,7 +30,7 @@ def execute_main(step):
 
 def main():
     parser = argparse.ArgumentParser(description="Execute main files based on step value.")
-    parser.add_argument("--step", type=int, required=True, choices=[1, 2, 3, 4], help="Step value (1, 2, 3, or 4)")
+    parser.add_argument("--step", type=int, required=True, choices=[1, 2, 3, 4, 5], help="Step value (1, 2, 3, 4, or 5)")
 
     # Add other command-line parameters here using argparse
     parser.add_argument("--dataset", choices=["idda", "femnist"], required=True, help="Dataset choice")
