@@ -1,7 +1,5 @@
 import os
 import json
-from collections import defaultdict
-from utils.utils import setup_pre_training, load_from_checkpoint
 import torch
 import random
 import numpy as np
@@ -59,13 +57,13 @@ def get_transforms(args):
     
     if args.model == 'deeplabv3_mobilenetv2':
         train_transforms = sstr.Compose([
-            #sstr.RandomResizedCrop((1920, 1080), scale=(1.0, 1.0)), #default  512, 928  #scale .5,2
+            sstr.RandomResizedCrop((512, 928), scale=(0.5, 2.0)),
             sstr.ToTensor(),
-            #sstr.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+            sstr.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
         test_transforms = sstr.Compose([
             sstr.ToTensor(),
-            #sstr.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+            sstr.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
     elif args.model == 'cnn' or args.model == 'resnet18':
         train_transforms = nptr.Compose([
@@ -103,11 +101,7 @@ def get_datasets(args): #get access to datasets in root/idda
     train_transforms, test_transforms = get_transforms(args)
 
     if args.dataset == 'idda':
-        root = "/content/drive/MyDrive/DELIVERY/idda"  #maybe change path
-        #/content/drive/MyDrive/idda/test_same_dom.txt
-        #/content/drive/MyDrive/idda
-        #/content/drive/MyDrive/MLDL/MLDL23-FL-project-main/data/idda
-        flag = False
+        root = "root/idda" 
         with open(os.path.join(root, 'train.json'), 'r') as f:
             all_data = json.load(f)
         for client_id in all_data.keys():
@@ -175,27 +169,11 @@ def gen_clients(args, train_datasets, test_datasets, model):
 
 def main():
     
-    parser = get_parser() #calls function inside utils.args, define seed, #clients ecc.
+    parser = get_parser()
     args = parser.parse_args() 
     set_seed(args.seed) 
-    
-
-    def weight_train_loss(losses):
-        """Function that weights losses over train round, taking only last loss for each user"""
-        fin_losses = {}
-        c = list(losses.keys())[0]
-        loss_names = list(losses[c]['loss'].keys())
-        for l_name in loss_names:
-            tot_loss = 0
-            weights = 0
-            for _, d in losses.items():
-                tot_loss += d['loss'][l_name][-1] * d['num_samples']
-                weights += d['num_samples']
-            fin_losses[l_name] = tot_loss / weights
-        return fin_losses
 
     last_scores = defaultdict(lambda: defaultdict(lambda: []))
-
 
     print(f'Initializing model...')
     model = model_init(args) 
