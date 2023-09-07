@@ -12,7 +12,6 @@ import matplotlib.pyplot as plt
 from utils.utils import HardNegativeMining, MeanReduction
 from torch import distributed
 import torchvision.transforms
-from utils.dist_utils import initialize_distributed, setup, find_free_port
 import torch.optim.lr_scheduler as lr_scheduler
 from torch.optim.lr_scheduler import LambdaLR
 
