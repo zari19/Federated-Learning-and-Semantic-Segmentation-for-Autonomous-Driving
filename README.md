@@ -1,7 +1,15 @@
-# Towards Real World Federated Learning
-### Machine Learning and Deep Learning 2023
+# Federated Learning and Semantic Segmentation for Autonomous Driving
+### Machine Learning and Deep Learning a.a. 2022/2023
 #### Politecnico di Torino
-Starting code for the Federated Learning project. Some functions are explicitly left blank for students to fill in.
+
+In this project we present an analysis of various sce-
+narios of Semantic Segmentation and Federated Learning
+implementations for autonomous driving. The analysis is
+based on comparing these various approaches with a cen-
+tralized baseline done with the IDDA Dataset. Moreover,
+we explore the application of a novel approach, Federated
+source-Free Domain Adaptation (FFreeDA), testing it with
+different parameters to gain deeper insights
 
 ## Setup
 #### Environment
@@ -10,30 +18,27 @@ If not working on CoLab, install environment with conda (preferred):
 conda env create -f mldl23fl.yml
 ```
 
-#### Datasets
-The repository supports experiments on the following datasets:
-1. **FEMNIST** (Federated Extended MNIST) from LEAF benchmark [1]
-   - Task: image classification on 62 classes
-   - 3,500 users
-   - Instructions for download and preprocessing in ```data/femnist/``` 
-2. Reduced **Federated IDDA** from FedDrive [2]
-   - Task: semantic segmentation for autonomous driving
-   - 24 users
-
 ## How to run
-The ```main.py``` orchestrates training. All arguments need to be specified through the ```args``` parameter (options can be found in ```utils/args.py```).
-Example of FedAvg experiment (**NB** training hyperparameters need to explicitly specified by the students):
+The ```MLDLD23.ipynb``` orchestrates training. The project is developed through five steps, each one can be executed by specifying ```bash --step ``` number in the command line, followed by all the required arguments. 
 
-- **FEMNIST** (Image Classification)
+- **Example_step_2** (IDDA Dataset)
 ```bash
-python main.py --dataset femnist --model resnet18 --num_rounds 1000 --num_epochs 5 --clients_per_round 10 
+python steps.py --step 2 --dataset idda --model deeplabv3_mobilenetv2 --num_rounds 200 --num_epochs 2 --clients_per_round 8  
 ```
-- **IDDA** (Semantic Segmentation)
-```bash
-python main.py --dataset idda --model deeplabv3_mobilenetv2 --num_rounds 200 --num_epochs 2 --clients_per_round 8 
-```
+## Step 1
+Centralized Approach and Data Augmentation on IDDA.
 
-## References
-[1] Caldas, Sebastian, et al. "Leaf: A benchmark for federated settings." Workshop on Federated Learning for Data Privacy and Confidentiality (2019). 
+## Step 2
+Supervised Federated Learning experiments trained and tested on IDDA.
 
-[2] Fantauzzo, Lidia, et al. "FedDrive: generalizing federated learning to semantic segmentation in autonomous driving." 2022 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS). IEEE, 2022.
+## Step 3
+Domain Adaptation task, pre-training phase on GTAV dataset, testing on IDDA.
+
+## Step 4
+Federated Self-training using Pseudo-Labels.
+
+## Step 5
+YOLOv8 Ensemble Learning, trained on IDDA tested on CityScapes.
+
+## Authors
+Valerio Mastrianni, Lal Akin, Riccardo Zanchetta
