@@ -247,7 +247,7 @@ def main():
             metric['eval_train'].update(labels, prediction)
 
         
-    def test2(metric):
+    def test(metric):
         """
         This method tests the model on the local dataset of the client.
         :param metric: StreamMetric object
@@ -275,11 +275,6 @@ def main():
 
               metric['test_same_dom'].update(labels, prediction)
 
-              if args.plot == "True":
-                  pred2 = prediction[0,:,:]  # Select the first image from the batch
-                  plt.imshow(pred2)
-                  plt.savefig('test_imgs/pred{}.png'.format(i))
-
             class_loss = torch.tensor(class_loss).to(device)
             print(f'class_loss = {class_loss}')
             class_loss = class_loss / len(test_join_dataloader)
@@ -289,7 +284,7 @@ def main():
 
     print("Step 3")
     print(f'Initializing model...')
-    model = model_init(args)  #select type of model from the comand above
+    model = model_init(args)
     model.cuda()
     print('Done.')
 
@@ -311,7 +306,7 @@ def main():
         scheduler = lr_scheduler.StepLR(opt, step_size=5, gamma=0.1)
         for r in tqdm(range(args.num_epochs), total= args.num_epochs):
 
-            #loss = server.train(metrics['eval_train'])
+        
             dict_all_epoch_losses = defaultdict(lambda: 0)
             running_loss = 0.0
 
@@ -322,9 +317,6 @@ def main():
 
                 opt.zero_grad()
                 outputs = _get_outputs(images)
-                # w2 = calc_cazzo(labels)
-                # w2 = torch.tensor(w2, dtype=torch.float32)
-                # w2 = w2.to(device, dtype=torch.float32)
                 criterion = nn.CrossEntropyLoss(ignore_index=255,reduction='none')
                 loss = reduction(criterion(outputs, labels), labels)
                 loss.backward()
@@ -333,20 +325,6 @@ def main():
             
             epoch_loss = running_loss / len(gta_dataloader)
             print(f'Epoch [{r+1}/{args.num_epochs}], Loss: {epoch_loss:.4f}')
-
-            # if args.ckpt == "True":
-            #     print("ckpt okok")
-            #     if r == args.num_epochs-1:
-            #         print("salviamooo")
-            #         PATH = "checkpoint/model.pt"
-            #         LOSS = running_loss
-
-            #         torch.save({
-            #                     'epoch': r,
-            #                     'model_state_dict': net.state_dict(),
-            #                     'optimizer_state_dict': opt.state_dict(),
-            #                     'loss': LOSS,
-            #                     }, PATH)
 
             scheduler.step()
 
@@ -359,7 +337,7 @@ def main():
     eval_score = metrics['eval_train'].get_results()
     print(eval_score) 
 
-    test2( metrics)
+    test( metrics)
     test_score = metrics['test_same_dom'].get_results()
     print(test_score) 
       
