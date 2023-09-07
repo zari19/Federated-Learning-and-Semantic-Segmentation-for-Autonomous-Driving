@@ -12,7 +12,6 @@ import matplotlib.pyplot as plt
 from utils.utils import HardNegativeMining, MeanReduction
 from torch import distributed
 import torchvision.transforms
-from utils.dist_utils import initialize_distributed, setup, find_free_port
 import torch.optim.lr_scheduler as lr_scheduler
 
 device = torch.device( 'cuda' if torch. cuda. is_available () else 'cpu')
@@ -36,20 +35,12 @@ class Client:
 
     def get_model(self):
         return self.model
-
-
+        
     @staticmethod
     def update_metric(metrics, outputs, labels, cur_step):
         _, prediction = outputs.max(dim=1)
         labels = labels.cpu().numpy()
         prediction = prediction.cpu().numpy()
-        # print(f'update_metric_prediction_type = {type(prediction)}')
-        # print(f'update_metric_prediction_shape = {prediction.shape}')
-
-        # pred = prediction[0,:,:]
-        # plt.imshow(pred)
-        # plt.savefig('trial_imgs/pred{}.png'.format(cur_step))
-
         metrics.update(labels, prediction)
 
     def _get_outputs(self, images):
@@ -74,79 +65,10 @@ class Client:
       loss_function = nn.CrossEntropyLoss()
       return loss_function
 
-    def calculate_class_weights(self, labels):
-        class_weights = torch.zeros(torch.max(labels) + 1)
-
-        # Count the frequency of each class
-        unique, counts = torch.unique(labels, return_counts=True)
-        class_frequency = dict(zip(unique.cpu().numpy(), counts.cpu().numpy()))
-
-        # Calculate class weights using inverse frequency
-        total_samples = torch.sum(torch.tensor(list(class_frequency.values())))
-        for class_label, frequency in class_frequency.items():
-            class_weights[class_label] = total_samples / (frequency * len(class_frequency))
-
-        #class_weights = class_weights.tolist()
-        #print(class_weights)
-        class_weights = torch.cat((class_weights[:15], class_weights[-1:]))
-        #print(class_weights)
-        return class_weights
-
-
-    def calc_losses(self, images, labels):
-      if self.args.model == 'deeplabv3_mobilenetv2':
-
-          outputs = self._get_outputs(images)
-          # print(type(outputs))
-          # print(outputs.shape)
-          # print(labels.shape)
-          #labels = F.interpolate(labels, size=(540, 960), mode='bilinear', align_corners=False)
-
-          # if outputs.size != (1920, 1080):
-          #       outputs = F.interpolate(outputs, size=(540, 960), mode='bilinear', align_corners=False)
-
-
-          w = self.calculate_class_weights(labels)
-          #new_array = original_array[0:15] + [original_array[-1]]
-          # class_weights_dict = {i: w for i, w in enumerate(w)}
-          # w = torch.tensor(list(class_weights_dict.values()))
-          # print(w)
-          w = w.to(device, dtype=torch.float32)
-          # print(w)
-          # print(len(w))
-          #criterion = nn.CrossEntropyLoss(w)
-          criterion = nn.CrossEntropyLoss(ignore_index=255, weight = w, reduction='none')
-
-          #print(labels)
-          loss_tot = self.reduction(criterion(outputs, labels), labels)
-          dict_calc_losses = {'loss_tot': loss_tot}
-      else:
-          raise NotImplementedError
-
-      return dict_calc_losses, outputs
-      
-    def handle_grad(self, loss_tot):
-        pass
-
-    def calc_loss_fed(dict_losses):
-        return dict_losses
-      
-    def clip_grad(self):
-        pass
-
     def generate_update(self):
         return copy.deepcopy(self.model.state_dict())
 
 
-    def _configure_optimizer(self, params):
-          if self.args.optimizer == 'SGD':
-              optimizer = optim.SGD(params, lr=self.args.lr, momentum=self.args.momentum,
-                                    weight_decay=self.args.weight_decay, nesterov=self.args.nesterov)
-          else:
-              optimizer = optim.Adam(params, lr=self.args.lr, weight_decay=self.args.weight_decay)
-          scheduler = get_scheduler(self.args, optimizer,
-                                    max_iter=10000 * self.args.num_epochs * len(self.loader))
-          return optimizer, scheduler
 
     def handle_log_loss(self, dict_all_epoch_losses, dict_losses_list):
 
@@ -166,18 +88,11 @@ class Client:
         dict_all_epoch_losses = defaultdict(lambda: 0)
 
         for cur_step, (images, labels) in enumerate(self.train_loader):
-            # TODO: missing code here!
+    
             images = images.to(device, dtype=torch.float32)
             labels = labels.to(device, dtype=torch.long)
-            # print("client transform")
-            # print(np.unique(labels.cpu().numpy()))
-            # print(f'train_images_shape = {images.shape}')
-            # print(f'train_output_shape = {labels.shape}')
-
             optimizer.zero_grad()
             dict_calc_losses, outputs = self.calc_losses(images, labels)
-            #print(f'outputs after calculate_loss = {outputs.shape}')
-
             dict_calc_losses['loss_tot'].backward()
             self.handle_grad(dict_calc_losses['loss_tot'])
 
@@ -222,30 +137,15 @@ class Client:
         :return: length of the local dataset, copy of the model parameters
         """
         num_train_samples = len(self.dataset)
-        #optimizer, scheduler = self._configure_optimizer(params)
         dict_losses_list = defaultdict(lambda: [])
         self.model.train()
-        #bn_dict_tmp = None
         net = self.get_model()
         opt = self.get_optimizer(net, lr=self.args.lr, wd=self.args.wd, momentum=self.args.m)
         scheduler = lr_scheduler.StepLR(opt, step_size=5, gamma=0.1)
-
-        # if self.args.ckpt:
-        #     checkpoint = torch.load(checkpoint.pt)
-        #     self.model.load_state_dict(checkpoint['model_state_dict'])
-        #     opt.load_state_dict(checkpoint['optimizer_state_dict'])
-        #     epoch = checkpoint['epoch']
-        #     loss = checkpoint['loss']
-
-        #self.model.train()
-        # TODO: missing code here!
         for epoch in range(self.args.num_epochs):
-            # TODO: missing code here!
             
             dict_all_epoch_losses = self.run_epoch(epoch, optimizer = opt, metrics=metrics, scheduler=scheduler)
             dict_all_epoch_losses, dict_losses_list = self.handle_log_loss(dict_all_epoch_losses, dict_losses_list)
-
-        #metrics.synch(self.device)
 
         update = self.generate_update()
 
@@ -258,65 +158,32 @@ class Client:
         pass
 
 
-    def test2(self, metric):
+    def test(self, metric):
         """
         This method tests the model on the local dataset of the client.
         :param metric: StreamMetric object
         """
-        print("sambuconeCuravito")
+        
         self.model.eval()
         class_loss = 0.0
         ret_samples = []
 
-        # if loader is None:
-        #     loader = self.loader
-
         with torch.no_grad():
             for i, sample in enumerate(self.test_loader):
-              print(f'loading image = {self.test_loader.dataset.list_samples[i]}')
-              images, labels = sample
-              
-              images = images.to(device, dtype=torch.float32)
-              labels = labels.to(device, dtype=torch.long)
-              # print(f'test_images_shape = {images.shape}')
-              # print(f'test_output_shape = {labels.shape}')
-              outputs = self._get_outputs(images)
-              # print(f'test_output_shape = {outputs.shape}')
-              # print(f'test_output_shape = {labels.shape}')
-
-              # im = labels.cpu().numpy()
-              # im = im.transpose(0, 1, 2)
-              # plt.imshow(im[0])
-              # plt.axis('off')
-              # plt.savefig("idda_label_test{}".format(i))
-
-              # im = images.cpu().numpy()
-              # im = im.transpose(2, 3, 1)
-              # plt.imshow(im[0])
-              # plt.axis('off')
-              # plt.savefig("idda_test{}".format(i))
-
-              loss = self.reduction(self.criterion(outputs, labels),labels)
-              class_loss += loss.item()
-
-              _, prediction = outputs.max(dim=1)
-              labels = labels.cpu().numpy()
-              prediction = prediction.cpu().numpy()
-              # print(f'prediction shape {i} = {prediction.shape}')
-              # print(f'pred_test = {np.unique(prediction)}')
-              unique_values, counts = np.unique(prediction, return_counts=True)
-
-              # Print the counts for each unique value
-              # for value, count in zip(unique_values, counts):
-              #     print("Value:", value, "Count:", count)
-              metric['test_same_dom'].update(labels, prediction)
-
-
-              if self.args.plot == True:
-                  pred2 = prediction[0,:,:]  # Select the first image from the batch
-                  plt.imshow(pred2)
-                  plt.savefig('test_imgs/pred{}.png'.format(i))
-
+                  print(f'loading image = {self.test_loader.dataset.list_samples[i]}')
+                  images, labels = sample
+                  images = images.to(device, dtype=torch.float32)
+                  labels = labels.to(device, dtype=torch.long)
+                  outputs = self._get_outputs(images)
+    
+                  loss = self.reduction(self.criterion(outputs, labels),labels)
+                  class_loss += loss.item()
+    
+                  _, prediction = outputs.max(dim=1)
+                  labels = labels.cpu().numpy()
+                  prediction = prediction.cpu().numpy()
+                  unique_values, counts = np.unique(prediction, return_counts=True)
+                  metric['test_same_dom'].update(labels, prediction)
             class_loss = torch.tensor(class_loss).to(device)
             print(f'class_loss = {class_loss}')
             class_loss = class_loss / len(self.test_loader)
