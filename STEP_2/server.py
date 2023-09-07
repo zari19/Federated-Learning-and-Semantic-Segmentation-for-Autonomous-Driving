@@ -4,55 +4,21 @@ import os
 import numpy as np
 from PIL import Image
 import torch
-device = torch.device( 'cuda' if torch. cuda. is_available () else 'cpu')
 from utils.stream_metrics import StreamClsMetrics, Metrics
 import torchvision.transforms as transforms
 import torch.optim as optim
 
+device = torch.device( 'cuda' if torch. cuda. is_available () else 'cpu')
 
 class Server:
 
-    def __init__(self, args, train_clients, test_clients, model, metrics, optimizer=None):
+    def __init__(self, args, model, metrics, optimizer=None):
         self.args = args
-        self.train_clients = train_clients
-        self.test_clients = test_clients
         self.model = model
         self.metrics = metrics
-        self.opt_string = optimizer
-        self.optimizer = self._get_optimizer()
         self.updates = []
-        #self.get_results = StreamClsMetrics()
         self.model_params_dict = copy.deepcopy(self.model.state_dict())
 
-    def _get_optimizer(self):
-
-          if self.opt_string is None:
-              print("Running without server optimizer")
-              return None
-
-          if self.opt_string == 'SGD':
-              return optim.SGD(params=self.model.parameters(), lr=self.lr, momentum=self.momentum)
-
-          if self.opt_string == 'FedAvgm':
-              return optim.SGD(params=self.model.parameters(), lr=1, momentum=0.9)
-
-          if self.opt_string == 'Adam':
-              return optim.Adam(params=self.model.parameters(), lr=self.lr, betas=(0.9, 0.99), eps=10 ** (-1))
-
-          if self.opt_string == 'AdaGrad':
-              return optim.Adagrad(params=self.model.parameters(), lr=self.lr, eps=10 ** (-2))
-
-          raise NotImplementedError
-
-
-
-    def select_clients(self):
-        num_clients = min(self.args.clients_per_round, len(self.train_clients))
-        return np.random.choice(self.train_clients, num_clients, replace=False)
-
-    def select_test_clients(self):
-        num_clients = min(self.args.clients_per_round, len(self.test_clients))
-        return np.random.choice(self.test_clients, num_clients, replace=False)
 
     def add_updates(self, num_samples, update):
         self.updates.append((num_samples, update))
@@ -64,27 +30,12 @@ class Server:
             return self.model(images)
         raise NotImplementedError
 
-    def get_dataset_num_classes(self,dataset): #return dataset number of classes
+    def get_dataset_num_classes(self,dataset): 
         if dataset == 'idda':
             return 16
         if dataset == 'femnist':
             return 62
         raise NotImplementedError
-
-
-    def weight_train_loss(self, losses):
-        """Function that weights losses over train round, taking only last loss for each user"""
-        fin_losses = {}
-        c = list(losses.keys())[0]
-        loss_names = list(losses[c]['loss'].keys())
-        for l_name in loss_names:
-            tot_loss = 0
-            weights = 0
-            for _, d in losses.items():
-                tot_loss += d['loss'][l_name][-1] * d['num_samples']
-                weights += d['num_samples']
-            fin_losses[l_name] = tot_loss / weights
-        return fin_losses
 
 
     def load_server_model_on_client(self, client):
@@ -117,7 +68,7 @@ class Server:
 
         averaged_sol_n = self.aggregate()
 
-        if self.optimizer is not None:  # optimizer step
+        if self.optimizer is not None:  
             self._server_opt(averaged_sol_n)
             self.total_grad = self._get_model_total_grad()
         else:
