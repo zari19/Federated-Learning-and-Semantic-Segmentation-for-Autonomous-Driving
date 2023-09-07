@@ -161,14 +161,6 @@ def set_metrics(args):
     return metrics
 
 
-def gen_clients(args, train_datasets, test_datasets, model):
-    clients = [[], []]
-    for i, datasets in enumerate([train_datasets, test_datasets]):
-        for ds in datasets:
-            clients[i].append(Client(args, ds, model, test_client=i == 1))
-    return clients[0], clients[1]
-
-
 def main():
     parser = get_parser() 
     args = parser.parse_args()  
