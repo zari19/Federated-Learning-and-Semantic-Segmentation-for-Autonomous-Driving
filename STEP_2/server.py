@@ -4,13 +4,11 @@ import os
 import numpy as np
 from PIL import Image
 import torch
-#from utils import weight_train_loss
 device = torch.device( 'cuda' if torch. cuda. is_available () else 'cpu')
 from utils.stream_metrics import StreamClsMetrics, Metrics
 import torchvision.transforms as transforms
 import torch.optim as optim
 
-#from main import get_dataset_num_classes
 
 class Server:
 
@@ -93,9 +91,6 @@ class Server:
         client.model.load_state_dict(self.model_params_dict)
 
     def train_round(self, clients, metrics):
-        # train_round_acc = 0.
-        # train_round_loss = 0.
-        #updates = []
         """
             This method trains the model with the dataset of the clients. It handles the training at single round level
             :param clients: list of all the clients to train
@@ -104,27 +99,12 @@ class Server:
         running_loss = {}
         for i, c in enumerate(clients): #i=#iteration from 0 to 8, c=#value of client
 
-            self.load_server_model_on_client(c) #maybe to remove from fedavg
-            # TODO: missing code here!
-            #nedd to access inside the json client to get images
-            print(f'iteration = {i}')
-            print(f'client = {c}')
-            #print(c.get_model())
+            self.load_server_model_on_client(c)
             
             num_train_samples, update, dict_losses_list = c.train(metrics)
-            #print('after train')
-            #self.add_updates(num_samples=num_train_samples, update=update)
-            # out = self.train_round(c)
-            # print('after train round')
-            # num_samples, update, dict_losses_list = out
-            #print(dict_losses_list)
             running_loss[c] = {'loss': dict_losses_list, 'num_samples': num_train_samples}
-            #print(f'running loss = {running_loss}')
-            #raise NotImplementedError
-            #averaged_update = self.aggregate()#.values()
             self.add_updates(num_samples=num_train_samples, update=update)
-
-        #print(f'update = {self.updates}')
+            
         return running_loss
 
     
@@ -155,8 +135,7 @@ class Server:
         total_weight = 0.0 
         base = OrderedDict()
         for (client_samples, client_model) in self.updates:
-          #print(f'client sample = {client_samples}')
-          #print(f'client model = {client_model}')
+          
           total_weight += client_samples
           for key,value in client_model.items():
             if key in base:
@@ -169,19 +148,18 @@ class Server:
           if total_weight !=0:
             averaged_update[key] = value.to('cuda')/total_weight
 
-        # TODO: missing code here!
-        #raise NotImplementedError
+    
         return averaged_update
 
     def train(self, metrics):
         """
         This method orchestrates the training the evals and tests at rounds level
         """
-        #train_metrics, val_metrics, ckpt_path = self.call_setup_pre_training()
+      
         if self.optimizer is not None:
             self.optimizer.zero_grad()
         clients = self.select_clients()
-        #print(self.train_clients)
+      
 
         running_loss = self.train_round(clients, metrics)
         dataset = self.args.dataset
@@ -203,8 +181,7 @@ class Server:
             c.test(mtr)
   
           return None
-        # TODO: missing code here!
-        #raise NotImplementedError
+     
 
   
     def test2(self,test_clients, metrics):
