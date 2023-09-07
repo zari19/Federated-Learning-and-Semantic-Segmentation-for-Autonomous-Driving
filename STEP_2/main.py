@@ -19,11 +19,8 @@ from models.deeplabv3 import deeplabv3_mobilenetv2
 from utils.stream_metrics import StreamSegMetrics, StreamClsMetrics
 from utils.utils import setup_env
 from utils.client_utils import setup_clients
-from time import sleep
 from tqdm import tqdm
-from google.colab import auth
-import gspread
-from google.auth import default
+
 
 
 
@@ -54,13 +51,12 @@ def model_init(args): #selects the type of model
         model.fc = nn.Linear(in_features=512, out_features=get_dataset_num_classes(args.dataset))
         return model
     if args.model == 'cnn':
-        # TODO: missing code here!
         raise NotImplementedError
     raise NotImplementedError
 
 
-def get_transforms(args): #perform data augmentation based on the model
-    # TODO: test your data augmentation by changing the transforms here!
+def get_transforms(args):
+    
     if args.model == 'deeplabv3_mobilenetv2':
         train_transforms = sstr.Compose([
             #sstr.RandomResizedCrop((1920, 1080), scale=(1.0, 1.0)), #default  512, 928  #scale .5,2
@@ -180,8 +176,8 @@ def gen_clients(args, train_datasets, test_datasets, model):
 def main():
     
     parser = get_parser() #calls function inside utils.args, define seed, #clients ecc.
-    args = parser.parse_args()  #??
-    set_seed(args.seed) #??
+    args = parser.parse_args() 
+    set_seed(args.seed) 
     
 
     def weight_train_loss(losses):
@@ -202,7 +198,7 @@ def main():
 
 
     print(f'Initializing model...')
-    model = model_init(args)  #select type of model from the comand above
+    model = model_init(args) 
     model.cuda()
     print('Done.')
 
