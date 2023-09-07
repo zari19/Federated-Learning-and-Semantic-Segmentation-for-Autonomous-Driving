@@ -1,7 +1,6 @@
 import os
 import json
 from collections import defaultdict
-from utils.utils import setup_pre_training, load_from_checkpoint
 import torch
 from torch.utils.data import DataLoader
 import random
@@ -22,11 +21,8 @@ from models.deeplabv3 import deeplabv3_mobilenetv2
 from utils.stream_metrics import StreamSegMetrics, StreamClsMetrics
 from utils.utils import setup_env
 from utils.client_utils import setup_clients
-from time import sleep
 from tqdm import tqdm
-from google.colab import auth
-import gspread
-from google.auth import default
+
 device = torch.device( 'cuda' if torch. cuda. is_available () else 'cpu')
 
 
@@ -57,22 +53,20 @@ def model_init(args): #selects the type of model
         model.fc = nn.Linear(in_features=512, out_features=get_dataset_num_classes(args.dataset))
         return model
     if args.model == 'cnn':
-        # TODO: missing code here!
         raise NotImplementedError
     raise NotImplementedError
 
 
 def get_transforms(args): #perform data augmentation based on the model
-    # TODO: test your data augmentation by changing the transforms here!
     if args.model == 'deeplabv3_mobilenetv2':
         train_transforms = sstr.Compose([
-            #sstr.RandomResizedCrop((1920, 1080), scale=(1.0, 1.0)), #default  512, 928  #scale .5,2
+            sstr.RandomResizedCrop((512, 928), scale=(0.5, 2.0)),
             sstr.ToTensor(),
-            #sstr.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+            sstr.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
         test_transforms = sstr.Compose([
             sstr.ToTensor(),
-            #sstr.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+            sstr.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
     elif args.model == 'cnn' or args.model == 'resnet18':
         train_transforms = nptr.Compose([
@@ -110,8 +104,8 @@ def get_datasets(args): #get access to datasets in root/idda
     train_transforms, test_transforms = get_transforms(args)
 
     if args.dataset == 'idda':
-        root = "/content/drive/MyDrive/DELIVERY/idda"  #maybe change path
-        psudo_labels_root = "/content/drive/MyDrive/DELIVERY/STEP_4/pseudo_label"
+        root = "/root/idda"
+        psudo_labels_root = "/root/pseudo_label"
 
         with open(os.path.join(root, 'train.json'), 'r') as f:
             all_data = json.load(f)
@@ -229,17 +223,13 @@ def main():
             _, prediction = outputs.max(dim=1)
             labels = labels.cpu().numpy()
             prediction = prediction.cpu().numpy()
-
             pseudo_label = prediction[0,:,:]
-            plt.imshow(pseudo_label)
-            plt.savefig('pseudo_label/{}.png'.format(idda_dataset.dataset.list_samples[cur_step]))
-            
 
     last_scores = defaultdict(lambda: defaultdict(lambda: []))
 
     print("Step 4... actually working")
     print(f'Initializing model...')
-    model = model_init(args)  #select type of model from the comand above
+    model = model_init(args)
     model.cuda()
     print('Done.')
 
@@ -253,16 +243,14 @@ def main():
     server = Server(args, train_clients, test_clients, model, metrics)
 
 
-    optimizer = optim.SGD(model.parameters(), lr=0.005, momentum=0.9)
+    optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.m)
     
 
     
-    load_checkpoints(PATH = "/content/drive/MyDrive/DELIVERY/STEP_4/checkpoint/model.pt")
+    load_checkpoints(PATH = "/rooot/checkpoint/model.pt")
 
     student_model = model
     teacher_model = model
-
-    #get_pseudo_label(model = teacher_model)
     
     t_rounds = 2
     for r in tqdm(range(args.num_rounds)):
@@ -285,11 +273,11 @@ def main():
             if args.modality4 == "3" and r % t_rounds ==0:
                 print("modality = 3")
                 server.update_model()
-            #teacher_model = student_model
+           
 
     print("Train completed")
 
-    server.test2(test_clients, metrics, model)
+    server.test(test_clients, metrics, model)
     test_score = metrics['test_same_dom'].get_results()
 
     print(test_score) 
