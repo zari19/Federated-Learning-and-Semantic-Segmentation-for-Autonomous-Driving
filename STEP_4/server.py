@@ -4,50 +4,24 @@ import os
 import numpy as np
 from PIL import Image
 import torch
-#from utils import weight_train_loss
+
 device = torch.device( 'cuda' if torch. cuda. is_available () else 'cpu')
 from utils.stream_metrics import StreamClsMetrics, Metrics
 import torchvision.transforms as transforms
 import torch.optim as optim
 
-#from main import get_dataset_num_classes
+
 
 class Server:
 
-    def __init__(self, args, train_clients, test_clients, model, metrics, optimizer=None):
+    def __init__(self, args, model, metrics, optimizer=None):
         self.args = args
-        self.train_clients = train_clients
-        self.test_clients = test_clients
         self.model = model
         self.metrics = metrics
-        self.opt_string = optimizer
-        self.optimizer = self._get_optimizer()
         self.updates = []
-        #self.get_results = StreamClsMetrics()
         self.model_params_dict = copy.deepcopy(self.model.state_dict())
 
-    def _get_optimizer(self):
-
-          if self.opt_string is None:
-              print("Running without server optimizer")
-              return None
-
-          if self.opt_string == 'SGD':
-              return optim.SGD(params=self.model.parameters(), lr=self.lr, momentum=self.momentum)
-
-          if self.opt_string == 'FedAvgm':
-              return optim.SGD(params=self.model.parameters(), lr=1, momentum=0.9)
-
-          if self.opt_string == 'Adam':
-              return optim.Adam(params=self.model.parameters(), lr=self.lr, betas=(0.9, 0.99), eps=10 ** (-1))
-
-          if self.opt_string == 'AdaGrad':
-              return optim.Adagrad(params=self.model.parameters(), lr=self.lr, eps=10 ** (-2))
-
-          raise NotImplementedError
-
-
-
+    
     def select_clients(self):
         num_clients = min(self.args.clients_per_round, len(self.train_clients))
         return np.random.choice(self.train_clients, num_clients, replace=False)
@@ -74,21 +48,6 @@ class Server:
         raise NotImplementedError
 
 
-    def weight_train_loss(self, losses):
-        """Function that weights losses over train round, taking only last loss for each user"""
-        fin_losses = {}
-        c = list(losses.keys())[0]
-        loss_names = list(losses[c]['loss'].keys())
-        for l_name in loss_names:
-            tot_loss = 0
-            weights = 0
-            for _, d in losses.items():
-                tot_loss += d['loss'][l_name][-1] * d['num_samples']
-                weights += d['num_samples']
-            fin_losses[l_name] = tot_loss / weights
-        return fin_losses
-
-
     def load_server_model_on_client(self, client):
         client.model.load_state_dict(self.model_params_dict)
 
@@ -107,12 +66,8 @@ class Server:
             num_train_samples, update, dict_losses_list = c.train(metrics, student_model, teacher_model)
 
             running_loss[c] = {'loss': dict_losses_list, 'num_samples': num_train_samples}
-            #print(f'running loss = {running_loss}')
-            #raise NotImplementedError
-            #averaged_update = self.aggregate()
             self.add_updates(num_samples=num_train_samples, update=update)
 
-        #print(f'update = {self.updates}')
         return running_loss
 
     
@@ -125,7 +80,7 @@ class Server:
 
         averaged_sol_n = self.aggregate()
 
-        if self.optimizer is not None:  # optimizer step
+        if self.optimizer is not None:  
             self._server_opt(averaged_sol_n)
             self.total_grad = self._get_model_total_grad()
         else:
@@ -143,8 +98,6 @@ class Server:
         total_weight = 0.0 
         base = OrderedDict()
         for (client_samples, client_model) in self.updates:
-          #print(f'client sample = {client_samples}')
-          #print(f'client model = {client_model}')
           total_weight += client_samples
           for key,value in client_model.items():
             if key in base:
@@ -157,8 +110,6 @@ class Server:
           if total_weight !=0:
             averaged_update[key] = value.to('cuda')/total_weight
 
-        # TODO: missing code here!
-        #raise NotImplementedError
         return averaged_update
 
     def train(self, metrics, student_model, teacher_model):
@@ -185,13 +136,11 @@ class Server:
             c.test(mtr)
   
           return None
-        # TODO: missing code here!
-        #raise NotImplementedError
 
   
-    def test2(self,test_clients, metrics, model):
+    def test(self,test_clients, metrics, model):
 
           """
                     This method handles the test on the test clients
           """
-          test_clients[1].test2(metrics)
+          test_clients[1].test(metrics)
