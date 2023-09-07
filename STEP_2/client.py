@@ -29,17 +29,14 @@ class Client:
         self.train_loader = DataLoader(self.dataset, batch_size=self.args.bs, shuffle=True, drop_last=True) \
             if not test_client else None
         self.test_loader = DataLoader(self.dataset, batch_size=self.args.bs, shuffle=False)
-        #self.writer = writer
         self.criterion = nn.CrossEntropyLoss(ignore_index=255, reduction='none')
         self.reduction = HardNegativeMining() if self.args.hnm else MeanReduction()
         
     def __str__(self):
         return self.name
 
-
     def get_model(self):
         return self.model
-
 
     @staticmethod
     def update_metric(metrics, outputs, labels, cur_step):
@@ -65,7 +62,6 @@ class Client:
 
     def calc_losses(self, images, labels):
       if self.args.model == 'deeplabv3_mobilenetv2':
-
           outputs = self._get_outputs(images)
           loss_tot = self.reduction(self.criterion(outputs, labels), labels)
           dict_calc_losses = {'loss_tot': loss_tot}
@@ -73,16 +69,10 @@ class Client:
           raise NotImplementedError
 
       return dict_calc_losses, outputs
-      
-    def handle_grad(self, loss_tot):
-        pass
 
     def calc_loss_fed(dict_losses):
         return dict_losses
       
-    def clip_grad(self):
-        pass
-
     def generate_update(self):
         return copy.deepcopy(self.model.state_dict())
 
@@ -164,8 +154,6 @@ class Client:
             opt, scheduler = self._configure_optimizer(net.parameters(), epoch)
             dict_all_epoch_losses = self.run_epoch(epoch, optimizer = opt, metrics=metrics, scheduler=scheduler)
             dict_all_epoch_losses, dict_losses_list = self.handle_log_loss(dict_all_epoch_losses, dict_losses_list)
-
-
 
         update = self.generate_update()
 
