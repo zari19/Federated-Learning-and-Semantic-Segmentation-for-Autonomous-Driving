@@ -19,9 +19,7 @@ conda env create -f mldl23fl.yml
 ```
 
 ## How to run
-The file ```MLDLD23.ipynb``` orchestrates training. The project is developed through five steps, each one can be executed by specifying ```bash
---step 2
-``` number in the command line, followed by all the required arguments. 
+The file ```MLDLD23.ipynb``` orchestrates training. The project is developed through five steps, each one can be executed by specifying ```--step ``` number in the command line, followed by all the required arguments. 
 
 - **Example_step_2** (IDDA Dataset)
 ```bash
