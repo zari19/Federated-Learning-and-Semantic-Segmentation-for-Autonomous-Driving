@@ -13,9 +13,7 @@ import matplotlib.pyplot as plt
 from utils.utils import HardNegativeMining, MeanReduction
 from torch import distributed
 import torchvision.transforms
-from utils.dist_utils import initialize_distributed, setup, find_free_port
 import torch.optim.lr_scheduler as lr_scheduler
-from utils.loss import SelfTrainingLoss
 
 device = torch.device( 'cuda' if torch. cuda. is_available () else 'cpu')
 
@@ -29,7 +27,6 @@ class Client:
         self.train_loader = DataLoader(self.dataset, batch_size=self.args.bs, shuffle=True, drop_last=True) \
             if not test_client else None
         self.test_loader = DataLoader(self.dataset, batch_size=self.args.bs, shuffle=False)
-        #self.writer = writer
         self.criterion = nn.CrossEntropyLoss(ignore_index=255, reduction='none')
         self.reduction = HardNegativeMining() if self.args.hnm else MeanReduction()
         
@@ -40,19 +37,11 @@ class Client:
     def get_model(self):
         return self.model
 
-
     @staticmethod
     def update_metric(metrics, outputs, labels, cur_step):
         _, prediction = outputs.max(dim=1)
         labels = labels.cpu().numpy()
         prediction = prediction.cpu().numpy()
-        # print(f'update_metric_prediction_type = {type(prediction)}')
-        # print(f'update_metric_prediction_shape = {prediction.shape}')
-
-        # pred = prediction[0,:,:]
-        # plt.imshow(pred)
-        # plt.savefig('trial_imgs/pred{}.png'.format(cur_step))
-
         metrics.update(labels, prediction)
 
     def _get_outputs(self, images, model):
@@ -116,7 +105,6 @@ class Client:
         for n, l in dict_all_epoch_losses.items():
 
             dict_all_epoch_losses[n] = torch.tensor(l).to(device)
-            #dict_losses_list[n].append(dict_all_epoch_losses[n])
         return dict_all_epoch_losses, dict_losses_list
 
 
@@ -129,16 +117,11 @@ class Client:
         dict_all_epoch_losses = defaultdict(lambda: 0)
 
         for cur_step, (images, labels) in enumerate(self.train_loader):
-            # TODO: missing code here!
+        
             images = images.to(device, dtype=torch.float32)
             labels = labels.to(device, dtype=torch.long)
-            # print(f'train_images_shape = {images.shape}')
-            # print(f'train_output_shape = {labels.shape}')
-
             optimizer.zero_grad()
             dict_calc_losses, outputs = self.calc_losses(images, labels, student_model, teacher_model)
-            #print(f'outputs after calculate_loss = {outputs.shape}')
-
             dict_calc_losses['loss_tot'].backward()
             self.handle_grad(dict_calc_losses['loss_tot'])
 
@@ -174,35 +157,22 @@ class Client:
         :return: length of the local dataset, copy of the model parameters
         """
         num_train_samples = len(self.dataset)
-        #optimizer, scheduler = self._configure_optimizer(params)
         dict_losses_list = defaultdict(lambda: [])
         self.model.train()
-        #bn_dict_tmp = None
         net = self.get_model()
         opt = self.get_optimizer(net, lr=self.args.lr, wd=self.args.wd, momentum=self.args.m)
         scheduler = lr_scheduler.StepLR(opt, step_size=5, gamma=0.1)
-        #self.model.train()
-        # TODO: missing code here!
         for epoch in range(self.args.num_epochs):
-            # TODO: missing code here!
             
             dict_all_epoch_losses = self.run_epoch(epoch, optimizer = opt, metrics=metrics, scheduler=scheduler, student_model=student_model, teacher_model=teacher_model)
             dict_all_epoch_losses, dict_losses_list = self.handle_log_loss(dict_all_epoch_losses, dict_losses_list)
 
-        #metrics.synch(self.device)
 
         update = self.generate_update()
 
         return num_train_samples, update, dict_losses_list
 
-    def subs_bn_stats(self, domain, train_cl_bn_stats):
-        pass
-
-    def copy_bn_stats(self):
-        pass
-
-
-    def test2(self, metric):
+    def test(self, metric):
         """
         This method tests the model on the local dataset of the client.
         :param metric: StreamMetric object
@@ -212,21 +182,13 @@ class Client:
         class_loss = 0.0
         ret_samples = []
 
-        # if loader is None:
-        #     loader = self.loader
-
         with torch.no_grad():
             for i, sample in enumerate(self.test_loader):
               images, labels = sample
               
               images = images.to(device, dtype=torch.float32)
               labels = labels.to(device, dtype=torch.long)
-              # print(f'test_images_shape = {images.shape}')
-              # print(f'test_output_shape = {labels.shape}')
               outputs = self._get_outputs(images, models)
-              # print(f'test_output_shape = {outputs.shape}')
-              # print(f'test_output_shape = {labels.shape}')
-
               loss = self.reduction(self.criterion(outputs, labels),labels)
               class_loss += loss.item()
 
@@ -234,12 +196,6 @@ class Client:
               labels = labels.cpu().numpy()
               prediction = prediction.cpu().numpy()
               metric['test_same_dom'].update(labels, prediction)
-
-
-              if self.args.plot == "True":
-                  pred2 = prediction[0,:,:]  # Select the first image from the batch
-                  plt.imshow(pred2)
-                  plt.savefig('test_imgs/pred{}.png'.format(i))
 
             class_loss = torch.tensor(class_loss).to(device)
             print(f'class_loss = {class_loss}')
