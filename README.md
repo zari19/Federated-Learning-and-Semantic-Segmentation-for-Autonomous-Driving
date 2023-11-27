@@ -32,12 +32,17 @@ python steps.py --step 2 --dataset idda --model deeplabv3_mobilenetv2 --num_roun
 ```
 ## Step 1
 Centralized Approach and Data Augmentation on IDDA.
+<img width="863" alt="ARCHITECTURE" src="https://github.com/zari19/Federated-Learning-and-Semantic-Segmentation-for-Autonomous-Driving/assets/144258993/f65f9a65-7783-411b-b96c-7250a0930ade">
+
 
 ## Step 2
 Supervised Federated Learning experiments trained and tested on IDDA.
 
 ## Step 3
 Domain Adaptation task, pre-training phase on GTAV dataset, testing on IDDA.
+Fourier Domain Adaptation (FDA)
+<img width="594" alt="FDA" src="https://github.com/zari19/Federated-Learning-and-Semantic-Segmentation-for-Autonomous-Driving/assets/144258993/ddbb1954-d6e5-4fe0-bd08-9ae5d4e5501a">
+
 
 ## Step 4
 Federated Self-training using Pseudo-Labels.
