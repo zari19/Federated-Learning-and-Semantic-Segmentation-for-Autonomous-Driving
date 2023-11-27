@@ -11,6 +11,11 @@ we explore the application of a novel approach, Federated
 source-Free Domain Adaptation (FFreeDA), testing it with
 different parameters to gain deeper insights
 
+<img width="887" alt="IMAGE_2" src="https://github.com/zari19/Federated-Learning-and-Semantic-Segmentation-for-Autonomous-Driving/assets/144258993/b8cb09b2-f16b-4d8d-bcb4-79227da450e9">
+
+
+
+
 ## Setup
 #### Environment
 If not working on CoLab, install environment with conda (preferred): 
